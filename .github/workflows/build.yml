@@ -10,47 +10,72 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python
+    - name: Set up Python 3.9
       uses: actions/setup-python@v4
       with:
         python-version: '3.9'
 
     - name: Install system dependencies
       run: |
-        sudo apt-get update
+        sudo apt-get update -y
         sudo apt-get install -y \
           git zip unzip openjdk-17-jdk \
           python3-pip autoconf libtool pkg-config \
-          zlib1g-dev libncurses5-dev libtinfo5 \
-          python3-cython
+          zlib1g-dev libncurses6-dev \
+          python3-dev libffi-dev \
+          libssl-dev libxml2-dev libxslt1-dev
 
     - name: Install Python dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install buildozer cython==0.29.33
+        python -m pip install --upgrade pip wheel
+        pip install --user buildozer cython==0.29.33
 
-    - name: Set up Android SDK/NDK
+    - name: Set up Android environment
       run: |
         mkdir -p ~/.android
         echo "export ANDROID_SDK_ROOT=~/android-sdk" >> ~/.bashrc
         echo "export ANDROID_HOME=~/android-sdk" >> ~/.bashrc
+        
+        # Install Command Line Tools
         wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
-        unzip -q cmdline-tools.zip -d ~/.android/cmdline-tools
-        mv ~/.android/cmdline-tools/cmdline-tools ~/.android/cmdline-tools/latest
-        yes | ~/.android/cmdline-tools/latest/bin/sdkmanager --licenses
-        ~/.android/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;34.0.0"
+        unzip -q cmdline-tools.zip -d ~/.android/
+        mv ~/.android/cmdline-tools ~/.android/cmdline-tools-latest
+        echo "export PATH=$PATH:~/.android/cmdline-tools-latest/bin" >> ~/.bashrc
+        
+        # Accept licenses
+        yes | ~/.android/cmdline-tools-latest/bin/sdkmanager --licenses
+        
+        # Install SDK packages
+        ~/.android/cmdline-tools-latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;34.0.0"
+        
+        # Install NDK
         wget -q https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
-        unzip -q android-ndk-r25b-linux.zip -d ~/.android
+        unzip -q android-ndk-r25b-linux.zip -d ~/.android/
+        mv ~/.android/android-ndk-r25b ~/.android/ndk-bundle
+        echo "export ANDROID_NDK_HOME=~/.android/ndk-bundle" >> ~/.bashrc
+        echo "export PATH=$PATH:~/.android/platform-tools" >> ~/.bashrc
+        
+        # Cleanup
         rm cmdline-tools.zip android-ndk-r25b-linux.zip
-        echo "export PATH=$PATH:~/.android/cmdline-tools/latest/bin:~/.android/platform-tools" >> ~/.bashrc
-        echo "export ANDROID_NDK_HOME=~/.android/android-ndk-r25b" >> ~/.bashrc
 
     - name: Build APK
       run: |
-        export PATH=$PATH:~/.local/bin
-        buildozer -v android debug
+        export PATH=$PATH:~/.local/bin:~/.android/cmdline-tools-latest/bin:~/.android/platform-tools
+        export ANDROID_SDK_ROOT=~/.android
+        export ANDROID_NDK_HOME=~/.android/ndk-bundle
+        
+        # Fix for Python 3.9 compatibility
+        python -m pip install --user virtualenv
+        buildozer -v android debug 2>&1 | tee build.log
+        grep -i "error:" build.log && exit 1
+        
+        # Verify APK exists
+        if [ ! -f bin/*.apk ]; then
+          echo "APK file not found!"
+          exit 1
+        fi
 
-    - name: Upload APK
+    - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
         name: app-debug
