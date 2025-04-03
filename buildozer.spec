@@ -5,15 +5,15 @@ package.domain = org.example
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf
 version = 1.0
-requirements = python3,kivy==2.0.0,urllib3,sdl2_ttf==2.0.15
+requirements = python3,kivy==2.2.1,urllib3,requests,android
 orientation = portrait
 android.permissions = INTERNET
-android.api = 30
+android.api = 33  # Используйте актуальную версию API
 android.minapi = 21
 android.ndk = 25b
-android.copy_libs = 1
-android.arch = armeabi-v7a
-p4a.branch = develop
+android.sdk = 34
+android.arch = armeabi-v7a,arm64-v8a  # Поддержка 32/64 бит
+p4a.branch = master  # Используйте стабильную ветку
 p4a.bootstrap = sdl2
 
 [buildozer]
