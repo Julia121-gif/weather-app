@@ -2,62 +2,52 @@ name: Build APK
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    
+    - uses: actions/checkout@v4
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.9'
-    
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install buildozer
+        pip install buildozer cython==0.29.33
         sudo apt-get update
         sudo apt-get install -y \
-          python3-pip \
-          build-essential \
-          git \
-          python3 \
-          python3-dev \
-          ffmpeg \
-          libsdl2-dev \
-          libsdl2-image-dev \
-          libsdl2-mixer-dev \
-          libsdl2-ttf-dev \
-          libportmidi-dev \
-          libswscale-dev \
-          libavformat-dev \
-          libavcodec-dev \
-          zlib1g-dev \
-          libgstreamer1.0 \
-          gstreamer1.0-plugins-base \
-          gstreamer1.0-plugins-good
-    
-    - name: Install NDK
+          git zip unzip openjdk-17-jdk \
+          python3-pip autoconf libtool pkg-config \
+          zlib1g-dev libncurses5-dev libtinfo5
+
+    - name: Set up Android SDK/NDK
       run: |
-        mkdir -p $HOME/.buildozer/android
+        mkdir -p ~/.android
+        echo "export ANDROID_SDK_ROOT=~/android-sdk" >> ~/.bashrc
+        echo "export ANDROID_HOME=~/android-sdk" >> ~/.bashrc
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+        unzip -q cmdline-tools.zip -d ~/.android/cmdline-tools
+        mv ~/.android/cmdline-tools/cmdline-tools ~/.android/cmdline-tools/latest
+        yes | ~/.android/cmdline-tools/latest/bin/sdkmanager --licenses
+        ~/.android/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;34.0.0"
         wget -q https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
-        unzip -q android-ndk-r25b-linux.zip -d $HOME/.buildozer/android
-        rm android-ndk-r25b-linux.zip
-        mv $HOME/.buildozer/android/android-ndk-r25b $HOME/.buildozer/android/ndk
-        echo "export ANDROIDNDK=$HOME/.buildozer/android/ndk" >> $GITHUB_ENV
-        echo "export ANDROIDAPI=30" >> $GITHUB_ENV
-    
+        unzip -q android-ndk-r25b-linux.zip -d ~/.android
+        rm cmdline-tools.zip android-ndk-r25b-linux.zip
+        echo "export PATH=$PATH:~/.android/cmdline-tools/latest/bin:~/.android/platform-tools" >> ~/.bashrc
+        echo "export ANDROID_NDK_HOME=~/.android/android-ndk-r25b" >> ~/.bashrc
+
     - name: Build APK
       run: |
-        buildozer android debug
-    
+        buildozer -v android debug
+        ls -la bin/
+
     - name: Upload APK
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       with:
         name: app-debug
         path: bin/*.apk
